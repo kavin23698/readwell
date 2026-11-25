@@ -18,7 +18,6 @@ export function Chip({ children, on, icon, onPress }: ChipProps) {
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        alignSelf: 'flex-start',
         gap: 6,
         height: 36,
         paddingHorizontal: 14,

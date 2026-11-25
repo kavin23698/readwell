@@ -1,7 +1,7 @@
 // Port of the kit's <Phone>: page gradient + frost texture, safe areas, status bar colour.
 import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, gradients, linear, textureFrost } from '@/theme';
 
@@ -27,9 +27,11 @@ export function Screen({ children, bg, dark, paper, overlay, noBottomInset, styl
     <View style={[styles.root, background]}>
       {!bg && !paper ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundImage: textureFrost }]} /> : null}
       <StatusBar style={dark ? 'light' : 'dark'} />
-      <View style={[styles.content, { paddingTop: insets.top + 4, paddingBottom: noBottomInset ? 0 : insets.bottom + 6 }, style]}>
+      <KeyboardAvoidingView
+        behavior="padding"
+        style={[styles.content, { paddingTop: insets.top + 4, paddingBottom: noBottomInset ? 0 : insets.bottom + 6 }, style]}>
         {children}
-      </View>
+      </KeyboardAvoidingView>
       {overlay}
     </View>
   );

@@ -8,32 +8,71 @@ import {
 } from '@expo-google-fonts/nunito';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Splash } from '@/components/kit/Splash';
+import { AuthProvider } from '@/features/auth/AuthProvider';
+import { useAccess } from '@/features/auth/useAccess';
+import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
-  const [loaded, error] = useFonts({
+function RootNavigator() {
+  const { ready, signedIn, recovering, needsOnboarding } = useAccess();
+  const [fontsLoaded, fontError] = useFonts({
     Nunito_400Regular,
     Nunito_500Medium,
     Nunito_600SemiBold,
     Nunito_700Bold,
     Nunito_800ExtraBold,
   });
+  const fontsReady = fontsLoaded || !!fontError;
+  const [minSplashDone, setMinSplashDone] = useState(false);
 
   useEffect(() => {
-    if (loaded || error) SplashScreen.hideAsync();
-  }, [loaded, error]);
+    if (!fontsReady) return;
+    SplashScreen.hideAsync();
+    const t = setTimeout(() => setMinSplashDone(true), 900);
+    return () => clearTimeout(t);
+  }, [fontsReady]);
 
-  if (!loaded && !error) return null;
+  if (!fontsReady) return null; // native splash still showing
+  if (!ready || !minSplashDone) return <Splash />;
 
+  return (
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.slate400 }, animation: 'fade_from_bottom' }}>
+      <Stack.Screen name="index" />
+      <Stack.Protected guard={!signedIn}>
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+      <Stack.Protected guard={!signedIn || needsOnboarding}>
+        <Stack.Screen name="(onboarding)" />
+      </Stack.Protected>
+      <Stack.Protected guard={signedIn && recovering}>
+        <Stack.Screen name="set-password" />
+      </Stack.Protected>
+      <Stack.Protected guard={signedIn && !recovering && !needsOnboarding}>
+        <Stack.Screen name="home" />
+      </Stack.Protected>
+      {/* Email links (readwell://auth/…) are always reachable. */}
+      <Stack.Screen name="auth/callback" />
+      <Stack.Screen name="auth/reset" />
+    </Stack>
+  );
+}
+
+export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.slate400 } }} />
+        <AuthProvider>
+          <ProfileProvider>
+            <RootNavigator />
+          </ProfileProvider>
+        </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
