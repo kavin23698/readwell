@@ -1,21 +1,8 @@
-export type GoalType = 'minutes' | 'pages';
-export type ReadingMode = 'slide' | 'scroll';
+import type { ProfileRow } from '@/db/schema';
 
-export type Profile = {
-  user_id: string;
-  display_name: string;
-  goal_type: GoalType;
-  daily_goal: number;
-  reminder_time: string; // "HH:MM", 24h, device local time
-  reading_mode: ReadingMode;
-  translation_language: string; // ML Kit / BCP-47 code, e.g. "hi"
-  onboarding_completed: boolean;
-  notif_daily: boolean;
-  notif_streak: boolean;
-  notif_challenge: boolean;
-  created_at: string;
-  updated_at: string;
-};
+export type Profile = ProfileRow;
+export type GoalType = ProfileRow['goal_type'];
+export type ReadingMode = ProfileRow['reading_mode'];
 
 /** What onboarding collects. */
 export type OnboardingChoices = Pick<Profile, 'goal_type' | 'daily_goal' | 'reminder_time' | 'reading_mode' | 'translation_language'>;

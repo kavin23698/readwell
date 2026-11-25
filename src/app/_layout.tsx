@@ -12,9 +12,11 @@ import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Splash } from '@/components/kit/Splash';
+import { SyncToast } from '@/components/kit/SyncToast';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { useAccess } from '@/features/auth/useAccess';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
+import { SyncProvider } from '@/sync/SyncProvider';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -69,9 +71,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <ProfileProvider>
-            <RootNavigator />
-          </ProfileProvider>
+          <SyncProvider>
+            <ProfileProvider>
+              <RootNavigator />
+              <SyncToast />
+            </ProfileProvider>
+          </SyncProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
