@@ -78,7 +78,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 999,
     borderWidth: 1,
-    alignSelf: 'flex-start',
   },
   full: { alignSelf: 'stretch' },
   disabled: { opacity: 0.5 },

@@ -25,7 +25,7 @@ export default function Home() {
           <HomeHeader name={profile.display_name} />
           <OfflineBanner />
           <Body gap={12}>
-            {book ? <ContinueCard book={book} onOpen={() => router.navigate('/library')} /> : null}
+            {book ? <ContinueCard book={book} onOpen={() => router.push({ pathname: '/reader/[id]', params: { id: book.id } })} /> : null}
             {stats ? <RatioCard stats={stats} profile={profile} /> : null}
             {bookCount === 0 ? <ImportFirstCard /> : null}
           </Body>

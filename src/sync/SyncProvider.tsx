@@ -5,6 +5,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { AppState } from 'react-native';
 import { pendingChanges, wipeLocalData } from '@/db';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { deleteAllLocalFiles } from '@/features/library/bookActions';
+import { runUploads } from '@/features/library/uploader';
 import { supabase } from '@/lib/supabase';
 import { onSyncStatus, setSyncPaused, syncNow, type SyncResult } from './engine';
 
@@ -50,6 +52,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       if (!onlineRef.current) return; // offline: the banner explains it, not an error
       if (r.error || r.failed) setProblem(r.error ?? 'Some changes could not be saved to your account.');
       else setProblem(null);
+      runUploads(); // book files waiting for the cloud
     },
     [],
   );
@@ -95,6 +98,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
+        deleteAllLocalFiles();
         wipeLocalData().then(refreshPending);
         setProblem(null);
       }

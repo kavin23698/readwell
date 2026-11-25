@@ -37,6 +37,9 @@ export function Cover({ book, w = 64, h, r = 10 }: { book: CoverBook; w?: number
         <>
           <Text
             numberOfLines={w < 50 ? 3 : 5}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+            textBreakStrategy="simple"
             style={{ fontFamily: 'Nunito_800ExtraBold', fontSize: Math.max(6, 13 * s), lineHeight: Math.max(7, 13 * s * 1.12), color: colors.textOnDark, marginTop: 4 * s }}>
             {book.title}
           </Text>

@@ -14,6 +14,7 @@ import type { ProfileRow } from '@/db/schema';
 import { formatLongDate, greeting, relativeTime } from '@/lib/dates';
 import { JOURNEY_DAYS, type DailyStats } from '@/features/stats/stats';
 import { colors, font } from '@/theme';
+import { startImportFlow } from '@/features/library/startImportFlow';
 import type { ContinueBook } from './useHomeData';
 
 export function HomeHeader({ name }: { name?: string | null }) {
@@ -126,7 +127,7 @@ export function ImportFirstCard() {
         </H>
         <P style={{ textAlign: 'center' }}>Add a book from your phone. Your progress starts the moment you open it.</P>
         <View style={{ marginTop: 6, alignSelf: 'stretch' }}>
-          <Button fullWidth icon="upload" onPress={() => router.navigate('/library')}>
+          <Button fullWidth icon="upload" onPress={startImportFlow}>
             Import book
           </Button>
         </View>

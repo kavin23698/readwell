@@ -67,7 +67,7 @@ export default function LogIn() {
               resent ? (
                 <Text style={[font(700, 12, 1.35), { color: colors.sage700 }]}>Sent — check your inbox.</Text>
               ) : (
-                <Button size="sm" variant="secondary" onPress={resendConfirmation}>
+                <Button size="sm" variant="secondary" onPress={resendConfirmation} style={{ alignSelf: 'flex-start' }}>
                   Resend confirmation email
                 </Button>
               )

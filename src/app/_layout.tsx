@@ -59,6 +59,9 @@ function RootNavigator() {
       <Stack.Protected guard={signedIn && !recovering && !needsOnboarding}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="performance" />
+        <Stack.Screen name="import" />
+        <Stack.Screen name="book/[id]" />
+        <Stack.Screen name="reader/[id]" />
       </Stack.Protected>
       {/* Email links (readwell://auth/…) are always reachable. */}
       <Stack.Screen name="auth/callback" />
