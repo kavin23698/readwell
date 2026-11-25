@@ -57,7 +57,8 @@ function RootNavigator() {
         <Stack.Screen name="set-password" />
       </Stack.Protected>
       <Stack.Protected guard={signedIn && !recovering && !needsOnboarding}>
-        <Stack.Screen name="home" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="performance" />
       </Stack.Protected>
       {/* Email links (readwell://auth/…) are always reachable. */}
       <Stack.Screen name="auth/callback" />
