@@ -41,3 +41,12 @@ example
 # generated native folders
 /ios
 /android
+
+# secrets — never commit
+.env
+.env.*
+!.env.example
+*.keystore
+.secret
+supabase/.temp/
+supabase/.branches/

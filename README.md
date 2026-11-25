@@ -1,56 +1,65 @@
-# Welcome to your Expo app 👋
+# Readwell
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Readwell helps people build a lasting daily reading habit. You import your own book files (EPUB, PDF, TXT)
+from your phone, read them in a comfortable reader with highlights, notes, translation and word meanings,
+and track your progress with a daily goal, streaks, and weekly or monthly challenges. Your library,
+reading position, highlights, notes and stats are saved to your account and sync across devices, and the
+app works offline after the first sign-in.
 
-## Get started
+The onboarding frames the habit as a journey of up to 254 days, based on Lally et al. (2009, University
+College London): people took 18–254 days for a new daily behaviour to become automatic, 66 days on
+average. 254 days is the longest anyone in that study took — the upper end of what was observed, not a
+requirement.
 
-1. Install dependencies
+> Status: in active development. Screens are built feature by feature from the Readwell designs
+> (Kavin Design System, 75 Android screens).
 
+## Tech stack
+
+- **Expo SDK 58** · React Native 0.88 (New Architecture) · TypeScript · Expo Router
+- **Expo development build** (`expo-dev-client`) — not Expo Go
+- **Supabase** — auth (email + password), Postgres with Row Level Security, private Storage for book files
+- **expo-sqlite** — local source of truth with a sync queue (offline first)
+- **react-native-webview** readers: epub.js (EPUB), pdf.js (PDF), custom renderer (TXT)
+- **expo-notifications** — local scheduled reminders
+- Nunito font, Lucide icons, design tokens in `src/theme`
+
+## Project structure
+
+```
+src/app/            Expo Router screens
+src/theme/          design tokens: colors, typography, spacing, effects
+src/components/ds/  Kavin Design System components (Button, IconButton, GlassCard, Icon…)
+src/components/kit/ Readwell screen kit (Screen, Tile, Chip, typography, layout…)
+plugins/            local Expo config plugins
+```
+
+## Running it
+
+Requirements: Node.js, Android Studio (SDK + JDK), an Android phone with USB debugging on.
+
+1. Install dependencies:
    ```bash
    npm install
    ```
-
-2. Start the app
-
+2. Copy `.env.example` to `.env` and fill in your Supabase project URL and anon (publishable) key.
+   Never put a service-role key or personal access token in `.env`.
+3. Build and install the development build on a USB-connected phone, then keep Metro running:
    ```bash
-   npx expo start
+   npx expo run:android --device
+   ```
+   If the phone can't reach Metro: `adb reverse tcp:8081 tcp:8081`.
+4. Later, start just the dev server (no native rebuild needed unless native dependencies change):
+   ```bash
+   npx expo start --dev-client
    ```
 
-In the output, you'll find options to open the app in a
+### Windows notes
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+React Native's C++ build creates file paths longer than 260 characters. You need:
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Windows long paths enabled (admin PowerShell):
+  `New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force`
+- CMake 3.31.6 from the Android SDK (`sdkmanager "cmake;3.31.6"`). The `plugins/withCmakeVersion.js`
+  config plugin makes every native module use it.
+- A project path without spaces.
