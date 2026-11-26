@@ -23,40 +23,46 @@ export function LanguagePicker({ value, onChange, label = 'Translate selections 
           />
         </View>
       </Pressable>
-      <Sheet visible={open} onClose={() => setOpen(false)} title="Translate into">
-        <FlatList
-          data={languages}
-          keyExtractor={(l) => l.code}
-          style={{ maxHeight: 420 }}
-          renderItem={({ item }) => {
-            const on = item.code === value;
-            return (
-              <Pressable
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                onPress={() => {
-                  onChange(item.code);
-                  setOpen(false);
-                }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  minHeight: 52,
-                  paddingHorizontal: 10,
-                  borderBottomWidth: 1,
-                  borderBottomColor: 'rgba(255,255,255,0.5)',
-                  gap: 12,
-                }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[font(700, 15, 1.3), { color: colors.rwInk }]}>{item.name}</Text>
-                  <Text style={[font(600, 13, 1.3), { color: colors.rwSec }]}>{item.native}</Text>
-                </View>
-                {on ? <Icon name="check" size={20} color={colors.teal700} strokeWidth={3} /> : null}
-              </Pressable>
-            );
-          }}
-        />
-      </Sheet>
+      <LanguageSheet visible={open} onClose={() => setOpen(false)} value={value} onChange={onChange} />
     </>
+  );
+}
+
+export function LanguageSheet({ visible, onClose, value, onChange }: { visible: boolean; onClose: () => void; value: string; onChange: (code: string) => void }) {
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Translate into">
+      <FlatList
+        data={languages}
+        keyExtractor={(l) => l.code}
+        style={{ maxHeight: 420 }}
+        renderItem={({ item }) => {
+          const on = item.code === value;
+          return (
+            <Pressable
+              accessibilityRole="radio"
+              accessibilityState={{ selected: on }}
+              onPress={() => {
+                onChange(item.code);
+                onClose();
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                minHeight: 52,
+                paddingHorizontal: 10,
+                borderBottomWidth: 1,
+                borderBottomColor: 'rgba(255,255,255,0.5)',
+                gap: 12,
+              }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[font(700, 15, 1.3), { color: colors.rwInk }]}>{item.name}</Text>
+                <Text style={[font(600, 13, 1.3), { color: colors.rwSec }]}>{item.native}</Text>
+              </View>
+              {on ? <Icon name="check" size={20} color={colors.teal700} strokeWidth={3} /> : null}
+            </Pressable>
+          );
+        }}
+      />
+    </Sheet>
   );
 }

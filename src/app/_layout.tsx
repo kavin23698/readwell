@@ -15,6 +15,7 @@ import { Splash } from '@/components/kit/Splash';
 import { SyncToast } from '@/components/kit/SyncToast';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { useAccess } from '@/features/auth/useAccess';
+import { NotificationsManager } from '@/features/notifications/NotificationsManager';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { SyncProvider } from '@/sync/SyncProvider';
 import { colors } from '@/theme';
@@ -69,6 +70,14 @@ function RootNavigator() {
         <Stack.Screen name="challenge/[id]" />
         <Stack.Screen name="challenge/created/[id]" />
         <Stack.Screen name="challenge/done/[id]" />
+        <Stack.Screen name="stats" />
+        <Stack.Screen name="want-to-read" />
+        <Stack.Screen name="want-to-read/add" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="settings/profile" />
+        <Stack.Screen name="settings/password" />
+        <Stack.Screen name="settings/goal" />
+        <Stack.Screen name="settings/notifications" />
       </Stack.Protected>
       {/* Email links (readwell://auth/…) are always reachable. */}
       <Stack.Screen name="auth/callback" />
@@ -86,6 +95,7 @@ export default function RootLayout() {
             <ProfileProvider>
               <RootNavigator />
               <SyncToast />
+              <NotificationsManager />
             </ProfileProvider>
           </SyncProvider>
         </AuthProvider>
