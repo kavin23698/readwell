@@ -21,8 +21,15 @@ function syncedColumns(t: TableName): Record<string, ColumnKind> {
 async function pushTable(t: TableName, userId: string): Promise<{ pushed: number; failed: number; error: string | null }> {
   const cols = syncedColumns(t);
   const key = tables[t].key;
-  const raw = await db.getAllAsync<Record<string, unknown>>(`SELECT * FROM ${t} WHERE dirty = 1 AND user_id = ?`, [userId]);
-  if (!raw.length) return { pushed: 0, failed: 0, error: null };
+  const rows = await db.getAllAsync<Record<string, unknown>>(`SELECT * FROM ${t} WHERE dirty = 1 AND user_id = ?`, [userId]);
+  if (!rows.length) return { pushed: 0, failed: 0, error: null };
+  // One row per key (keep the newest) — a concurrent write can make a scan return a row twice.
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const r of rows) {
+    const prev = byKey.get(r[key] as string);
+    if (!prev || String(r.updated_at) >= String(prev.updated_at)) byKey.set(r[key] as string, r);
+  }
+  const raw = [...byKey.values()];
 
   let pushed = 0;
   let failed = 0;
@@ -30,20 +37,26 @@ async function pushTable(t: TableName, userId: string): Promise<{ pushed: number
   for (let i = 0; i < raw.length; i += PUSH_BATCH) {
     const batch = raw.slice(i, i + PUSH_BATCH).map((r) => fromSqlite(t, r) as unknown as Record<string, unknown>);
     const payload = batch.map((r) => Object.fromEntries(Object.keys(cols).map((c) => [c, r[c] ?? null])));
+    let ok = batch;
     const { error: e } = await supabase.from(t).upsert(payload, { onConflict: key });
     if (e) {
-      failed += batch.length;
-      error = e.message;
-      console.warn(`[sync] push ${t} failed:`, e.message);
-      continue;
+      console.warn(`[sync] push ${t} batch failed:`, e.message, JSON.stringify(payload.map((r) => r[key])));
+      // Retry row by row so one bad row can't block the rest.
+      ok = [];
+      for (let j = 0; j < batch.length; j++) {
+        const { error: e1 } = await supabase.from(t).upsert(payload[j], { onConflict: key });
+        if (e1) {
+          failed++;
+          error = e1.message;
+          console.warn(`[sync] push ${t} row ${String(payload[j][key])} failed:`, e1.message);
+        } else ok.push(batch[j]);
+      }
     }
     // Clear the dirty flag only if the row wasn't edited again while we were pushing.
-    await db.withTransactionAsync(async () => {
-      for (const r of batch) {
-        await db.runAsync(`UPDATE ${t} SET dirty = 0 WHERE ${key} = ? AND updated_at = ?`, [r[key] as string, r.updated_at as string]);
-      }
-    });
-    pushed += batch.length;
+    for (const r of ok) {
+      await db.runAsync(`UPDATE ${t} SET dirty = 0 WHERE ${key} = ? AND updated_at = ?`, [r[key] as string, r.updated_at as string]);
+    }
+    pushed += ok.length;
   }
   return { pushed, failed, error };
 }
@@ -62,8 +75,9 @@ async function applyRemote(t: TableName, rows: Record<string, unknown>[]): Promi
   const key = tables[t].key;
   let applied = 0;
   await db.withTransactionAsync(async () => {
+    const tx = db;
     for (const remote of rows) {
-      const local = await db.getFirstAsync<{ updated_at: string; dirty: number }>(`SELECT updated_at, dirty FROM ${t} WHERE ${key} = ?`, [
+      const local = await tx.getFirstAsync<{ updated_at: string; dirty: number }>(`SELECT updated_at, dirty FROM ${t} WHERE ${key} = ?`, [
         remote[key] as string,
       ]);
       // A newer unsynced local edit wins; it will be pushed next.
@@ -75,9 +89,9 @@ async function applyRemote(t: TableName, rows: Record<string, unknown>[]): Promi
       });
       if (local) {
         // UPDATE keeps local-only columns (e.g. the downloaded file path).
-        await db.runAsync(`UPDATE ${t} SET ${cols.map((c) => `${c} = ?`).join(', ')}, dirty = 0 WHERE ${key} = ?`, [...values, remote[key] as string]);
+        await tx.runAsync(`UPDATE ${t} SET ${cols.map((c) => `${c} = ?`).join(', ')}, dirty = 0 WHERE ${key} = ?`, [...values, remote[key] as string]);
       } else {
-        await db.runAsync(`INSERT INTO ${t} (${cols.join(', ')}, dirty) VALUES (${cols.map(() => '?').join(', ')}, 0)`, values);
+        await tx.runAsync(`INSERT INTO ${t} (${cols.join(', ')}, dirty) VALUES (${cols.map(() => '?').join(', ')}, 0)`, values);
       }
       applied++;
     }
@@ -179,6 +193,7 @@ async function runOnce(): Promise<SyncResult> {
       pulled += n;
     }
   } catch (e) {
+    console.warn('[sync] pull failed:', e instanceof Error ? e.message : String(e));
     error = error ?? (e instanceof Error ? e.message : String(e));
   }
   if (changed.length) notify(...changed);

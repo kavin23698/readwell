@@ -76,10 +76,18 @@ async function importInner(f: PickedFile, onStep?: (pct: number, label: string) 
 
   try {
     onStep?.(15, 'Copying file');
-    source.copy(dest);
+    // Read from the picked file, then copy; if the copy isn't visible yet, write the bytes directly.
+    const bytes = await source.bytes();
+    try {
+      source.copy(dest);
+    } catch {
+      // fall through to the explicit write below
+    }
+    if (!dest.exists || dest.size !== bytes.length) {
+      dest.create({ overwrite: true });
+      dest.write(bytes);
+    }
     onStep?.(45, format === 'pdf' ? 'Reading pages' : 'Reading book details');
-
-    const bytes = await dest.bytes();
     if (format === 'epub') {
       const meta = await readEpubMeta(bytes);
       if (meta.title) title = meta.title;

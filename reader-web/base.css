@@ -1,0 +1,50 @@
+:root {
+  --bg: #eef3f5;
+  --fg: #1a2a38;
+  --muted: #5e707c;
+  --font-size: 16.5px;
+  --line-height: 1.72;
+  --pad-x: 26px;
+  --pad-top: 44px;
+  --pad-bottom: 40px;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Nunito', system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+::selection {
+  background: rgba(62, 127, 140, 0.32);
+}
+.rw-hl {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 3px;
+  mix-blend-mode: multiply;
+}
+body.dark .rw-hl {
+  mix-blend-mode: screen;
+}
+.rw-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font: 600 14px/1.4 'Nunito', system-ui, sans-serif;
+}
+#hl-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}

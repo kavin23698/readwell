@@ -1,6 +1,7 @@
 // Reader entry: makes sure the book file is on this phone (downloading it with progress on a new
-// device), then opens it. The reading view itself arrives with the Reader feature.
+// device), then opens the reader.
 import { router, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button } from '@/components/ds/Button';
@@ -13,8 +14,9 @@ import { nowIso, patch } from '@/db';
 import { deleteBook } from '@/features/library/bookActions';
 import { ensureLocalFile, NotUploadedError } from '@/features/library/uploader';
 import { useBook } from '@/features/library/useLibrary';
+import { Reader } from '@/features/reader/Reader';
 
-type Phase = { kind: 'loading'; fraction: number | null } | { kind: 'ready' } | { kind: 'error'; offline: boolean; notUploaded: boolean };
+type Phase = { kind: 'loading'; fraction: number | null } | { kind: 'ready'; uri: string } | { kind: 'error'; offline: boolean; notUploaded: boolean };
 
 export default function ReaderEntry() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,10 +30,10 @@ export default function ReaderEntry() {
     let cancelled = false;
     setPhase({ kind: 'loading', fraction: null });
     ensureLocalFile(book, (f) => !cancelled && setPhase({ kind: 'loading', fraction: f }))
-      .then(async () => {
+      .then(async (uri) => {
         if (cancelled) return;
         await patch('books', book.id, { last_opened_at: nowIso() });
-        setPhase({ kind: 'ready' });
+        setPhase({ kind: 'ready', uri });
       })
       .catch((e) => {
         if (cancelled) return;
@@ -96,9 +98,9 @@ export default function ReaderEntry() {
   }
 
   return (
-    <Screen>
-      <AppBar title={book.title} />
-      <Empty icon="book-open" title="Ready to read" body="The book is on this phone. The reading view arrives with the next feature (Reader)." />
-    </Screen>
+    <>
+      <StatusBar style="dark" />
+      <Reader book={book} fileUri={phase.uri} />
+    </>
   );
 }

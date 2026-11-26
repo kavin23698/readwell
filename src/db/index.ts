@@ -10,6 +10,7 @@ export const db = SQLite.openDatabaseSync('readwell.db');
 
 function migrate() {
   db.execSync('PRAGMA journal_mode = WAL;');
+  db.execSync('PRAGMA busy_timeout = 5000;');
   const { user_version } = db.getFirstSync<{ user_version: number }>('PRAGMA user_version') ?? { user_version: 0 };
   if (user_version < 1) {
     db.withTransactionSync(() => {
@@ -142,7 +143,12 @@ export async function save<T extends TableName>(t: T, row: Partial<RowOf[T]> & R
   };
   const cols = Object.keys(kinds).filter((c) => c in full);
   const dirty = opts.dirty === false ? 0 : 1;
-  const sql = `INSERT OR REPLACE INTO ${t} (${cols.join(', ')}, dirty) VALUES (${cols.map(() => '?').join(', ')}, ?)`;
+  // Upsert in place (not INSERT OR REPLACE): keeps the rowid stable, so a concurrent scan by the sync
+  // engine never sees the same row twice.
+  const key = tables[t].key;
+  const updates = cols.filter((c) => c !== key && c !== 'created_at').map((c) => `${c} = excluded.${c}`);
+  const sql = `INSERT INTO ${t} (${cols.join(', ')}, dirty) VALUES (${cols.map(() => '?').join(', ')}, ?)
+    ON CONFLICT(${key}) DO UPDATE SET ${[...updates, 'dirty = excluded.dirty'].join(', ')}`;
   await db.runAsync(sql, [...cols.map((c) => toSqliteValue(kinds[c], full[c])), dirty]);
   if (!opts.silent) notify(t);
   if (dirty) onLocalWrite();
@@ -174,8 +180,9 @@ export async function remove(t: TableName, key: string) {
 /** Wipes everything (sign-out), so the next account starts clean. */
 export async function wipeLocalData() {
   await db.withTransactionAsync(async () => {
-    for (const t of syncOrder) await db.runAsync(`DELETE FROM ${t}`);
-    await db.runAsync('DELETE FROM sync_state');
+    const tx = db;
+    for (const t of syncOrder) await tx.runAsync(`DELETE FROM ${t}`);
+    await tx.runAsync('DELETE FROM sync_state');
   });
   notify(...syncOrder);
 }

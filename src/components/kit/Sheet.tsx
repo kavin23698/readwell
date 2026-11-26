@@ -1,6 +1,7 @@
 // Kit Sheet: bottom sheet over a scrim (modal). Tap the scrim or the back button to close.
 import type { ReactNode } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/ds/IconButton';
 import { colors, font, gradients, linear, shadow } from '@/theme';
@@ -12,6 +13,7 @@ export function Sheet({
   right,
   children,
   light = true,
+  noScrim,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -19,15 +21,17 @@ export function Sheet({
   right?: ReactNode;
   children?: ReactNode;
   light?: boolean;
+  /** Keep the page behind fully visible (reader colour sheets). */
+  noScrim?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+      <GestureHandlerRootView style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
           accessibilityLabel="Close"
           onPress={onClose}
-          style={{ position: 'absolute', inset: 0, backgroundColor: light ? colors.scrimLight : colors.scrim }}
+          style={{ position: 'absolute', inset: 0, backgroundColor: noScrim ? 'transparent' : light ? colors.scrimLight : colors.scrim }}
         />
         <View
           style={{
@@ -52,7 +56,7 @@ export function Sheet({
           ) : null}
           {children}
         </View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
