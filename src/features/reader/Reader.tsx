@@ -1,23 +1,32 @@
 // The reader: an offline WebView page per format (assets/reader/*.html) plus native overlays —
-// selection menu (36), highlight colours (37/38), edit highlight (40), controls (35), toasts.
+// selection menu (36), highlight colours (37/38), edit highlight (40), controls (35), meaning (41,
+// 43, 44), add note (45), reading settings, toasts; the reading timer feeds the session summary (46).
 import { Asset } from 'expo-asset';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView as RNWebView, type WebViewMessageEvent, type WebViewProps } from 'react-native-webview';
 import { Toast } from '@/components/kit/Toast';
 import type { BookFormat, BookRow } from '@/db/schema';
+import { MeaningSheet } from '@/features/dictionary/MeaningSheet';
+import { AddNoteSheet } from '@/features/notes/AddNoteSheet';
+import { addNote, noteForHighlight, updateNote } from '@/features/notes/notesData';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import type { ReadingMode } from '@/features/profile/types';
-import { colors, font } from '@/theme';
-import { rememberColor } from './colors';
+import { useDailyStats } from '@/features/stats/stats';
+import { TranslateSheet } from '@/features/translate/TranslateSheet';
+import { colors, font, highlightColors } from '@/theme';
+import { recentColors, rememberColor } from './colors';
 import { CustomColorSheet, HighlightColorSheet } from './ColorSheets';
 import { HighlightPopover } from './HighlightPopover';
 import { addHighlight, deleteHighlight, getProgress, recolorHighlight, saveProgress, useHighlights, type Position } from './readerData';
 import { ReaderBars } from './ReaderBars';
+import { readerThemes, useReaderSettings } from './readerSettings';
+import { ReaderSettingsSheet } from './ReaderSettingsSheet';
 import { SelectionMenu, type Rect, type SelectionAction } from './SelectionMenu';
+import { useReadingTimer } from './useReadingTimer';
 
 // react-native-webview's typings collapse to never under RN 0.88's types; use its declared props.
 type WebViewHandle = { injectJavaScript: (js: string) => void };
@@ -28,6 +37,9 @@ const pageAssets: Record<BookFormat, number> = {
   pdf: require('@/assets/reader/pdf.html'),
   txt: require('@/assets/reader/txt.html'),
 };
+
+/** Sessions shorter than this close straight back instead of showing the summary. */
+const SUMMARY_MIN_SECONDS = 60;
 
 type Selection = { text: string; location: string; rect: Rect; page: number | null; chapter: string | null };
 type Msg =
@@ -42,27 +54,44 @@ type Msg =
   | { type: 'noTextLayer' }
   | { type: 'error'; message: string };
 
-export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: string; onActivity?: () => void }) {
+type SheetKind = null | 'colors' | 'custom' | 'editCustom' | 'settings' | 'meaning' | 'translate' | 'note';
+type NoteTarget = { quote: string | null; color: string | null; location: string | null; highlightId: string | null; noteId: string | null; initial: string; page: number | null; chapter: string | null };
+
+export function Reader({ book, fileUri }: { book: BookRow; fileUri: string }) {
   const insets = useSafeAreaInsets();
   const { profile, update } = useProfile();
   const web = useRef<WebViewHandle>(null);
   const highlights = useHighlights(book.id);
+  const { settings, update: updateSettings } = useReaderSettings();
+  const stats = useDailyStats();
+  const timer = useReadingTimer(book);
   const [pageUri, setPageUri] = useState<string | null>(null);
   const [mode, setMode] = useState<ReadingMode>(profile?.reading_mode ?? 'slide');
   const [pos, setPos] = useState<Position | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [bars, setBars] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [sheet, setSheet] = useState<null | 'colors' | 'custom' | 'editCustom'>(null);
+  const [sheet, setSheet] = useState<SheetKind>(null);
   const [editing, setEditing] = useState<{ id: string; rect: Rect } | null>(null);
+  const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
   const [toast, setToast] = useState<{ text: string; icon?: 'check' | 'bookmark' | 'info' | 'copy' } | null>(null);
   const [noText, setNoText] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
+  const closing = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPos = useRef<Position | null>(null);
+  const ratioBefore = useRef<number | null>(null);
   // A tap on an EPUB highlight also arrives as a page tap; wait briefly so the highlight wins.
   const barsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isPdf = book.format === 'pdf';
+  const theme = readerThemes[isPdf ? 'light' : (settings?.theme ?? 'light')];
+  const pageBg = isPdf ? '#c9d3d9' : theme.bg;
+
+  useEffect(() => {
+    if (stats && ratioBefore.current == null) ratioBefore.current = stats.todayPct;
+  }, [stats]);
 
   // Load the reader page for this format.
   useEffect(() => {
@@ -82,10 +111,25 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
 
   const hlPayload = useMemo(() => (highlights ?? []).map((h) => ({ id: h.id, color: h.color, location: h.location })), [highlights]);
 
-  // Keep highlights in the page in sync with the database.
   useEffect(() => {
     if (loaded) send({ type: 'setHighlights', highlights: hlPayload });
   }, [hlPayload, loaded, send]);
+
+  const pageSettings = useMemo(
+    () => ({ ...(settings ?? { theme: 'light', fontSize: 16.5, lineHeight: 1.72 }), padTop: insets.top + 30, padBottom: insets.bottom + 34 }),
+    [settings, insets.top, insets.bottom],
+  );
+
+  // Settings changes after the book is open.
+  const firstSettings = useRef(true);
+  useEffect(() => {
+    if (!loaded || !settings) return;
+    if (firstSettings.current) {
+      firstSettings.current = false;
+      return;
+    }
+    send({ type: 'settings', settings: pageSettings });
+  }, [pageSettings, loaded, settings, send]);
 
   const showToast = useCallback((text: string, icon?: 'check' | 'bookmark' | 'info' | 'copy') => {
     setToast({ text, icon });
@@ -98,10 +142,51 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
     if (lastPos.current) saveProgress(book, lastPos.current);
   }, [book]);
 
-  // Save the position when leaving the reader.
-  useEffect(() => () => flushSave(), [flushSave]);
+  /** Close the book: save position + session, then show the summary for real reading sessions. */
+  const close = useCallback(async () => {
+    if (closing.current) return;
+    closing.current = true;
+    flushSave();
+    const totals = await timer.finish();
+    if (totals.seconds >= SUMMARY_MIN_SECONDS) {
+      router.replace({
+        pathname: '/session-summary',
+        params: { bookId: book.id, title: book.title, seconds: String(totals.seconds), pages: String(totals.pages), before: String(ratioBefore.current ?? 0) },
+      });
+    } else {
+      router.back();
+    }
+  }, [flushSave, timer, book.id, book.title]);
 
-  const settings = useMemo(() => ({ theme: 'light', fontSize: 16.5, lineHeight: 1.72, padTop: insets.top + 30, padBottom: insets.bottom + 34 }), [insets.top, insets.bottom]);
+  // Android back button closes the book the same way.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (sheet || selection || editing) {
+        setSheet(null);
+        setEditing(null);
+        if (selection) {
+          setSelection(null);
+          send({ type: 'clearSelection' });
+        }
+        return true;
+      }
+      close();
+      return true;
+    });
+    return () => sub.remove();
+  }, [close, sheet, selection, editing, send]);
+
+  // Leaving by any other route still saves.
+  useEffect(
+    () => () => {
+      if (!closing.current) {
+        flushSave();
+        timer.finish();
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   async function onMessage(e: WebViewMessageEvent) {
     let msg: Msg;
@@ -112,10 +197,10 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
     }
     switch (msg.type) {
       case 'ready': {
-        if (started.current) return;
+        if (started.current || !settings) return;
         started.current = true;
         const progress = await getProgress(book.id);
-        send({ type: 'init', fileUrl: fileUri, format: book.format, mode, location: progress?.location ?? null, highlights: hlPayload, settings });
+        send({ type: 'init', fileUrl: fileUri, format: book.format, mode, location: progress?.location ?? null, highlights: hlPayload, settings: pageSettings });
         if (progress?.page) showToast(`Resumed at page ${progress.page}`, 'bookmark');
         return;
       }
@@ -126,14 +211,15 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
         const p: Position = { location: msg.location, percent: msg.percent, page: msg.page, total: msg.total, chapter: msg.chapter };
         setPos((prev) => ({ ...p, percent: p.percent ?? prev?.percent ?? null, total: p.total ?? prev?.total ?? null, page: p.page ?? prev?.page ?? null }));
         lastPos.current = p;
+        timer.onPage(p.page);
         setLoaded(true);
-        // Saved every few seconds and when the reader closes.
         if (!saveTimer.current) saveTimer.current = setTimeout(flushSave, 3000);
         return;
       }
       case 'selection':
         setEditing(null);
-        if (book.format === 'pdf' && noText) return;
+        timer.onActivity();
+        if (isPdf && noText) return;
         setSelection(msg);
         return;
       case 'selectionCleared':
@@ -154,7 +240,7 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
         }, 250);
         return;
       case 'activity':
-        onActivity?.();
+        timer.onActivity();
         return;
       case 'noTextLayer':
         setNoText(true);
@@ -165,6 +251,9 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
         return;
     }
   }
+
+  // Wait for settings before rendering the page so the first paint uses them.
+  const ready = !!pageUri && !!settings;
 
   function clearSelection() {
     setSelection(null);
@@ -177,13 +266,27 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
       await Clipboard.setStringAsync(selection.text);
       clearSelection();
       showToast('Copied', 'copy');
-      return;
-    }
-    if (a === 'highlight') {
+    } else if (a === 'highlight') {
       setSheet('colors');
-      return;
+    } else if (a === 'note') {
+      // A note on a selection also highlights it (last colour used, else sun), so it's findable.
+      const recent = await recentColors();
+      setNoteTarget({
+        quote: selection.text,
+        color: recent[0] ?? highlightColors.sun,
+        location: selection.location,
+        highlightId: null,
+        noteId: null,
+        initial: '',
+        page: selection.page ?? pos?.page ?? null,
+        chapter: selection.chapter ?? pos?.chapter ?? null,
+      });
+      setSheet('note');
+    } else if (a === 'meaning') {
+      setSheet('meaning');
+    } else {
+      setSheet('translate');
     }
-    showToast(a === 'note' ? 'Notes arrive in the next step' : a === 'meaning' ? 'Meaning arrives in the next step' : 'Translate arrives in the next step', 'info');
   }
 
   async function applyColor(hex: string) {
@@ -198,7 +301,8 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
 
   async function onEditAction(a: 'note' | 'copy' | 'remove') {
     const h = highlights?.find((x) => x.id === editing?.id);
-    if (!h) return setEditing(null);
+    setEditing(null);
+    if (!h) return;
     if (a === 'copy') {
       await Clipboard.setStringAsync(h.text);
       showToast('Copied', 'copy');
@@ -206,9 +310,28 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
       await deleteHighlight(h.id);
       showToast('Highlight removed', 'check');
     } else {
-      showToast('Notes arrive in the next step', 'info');
+      const existing = await noteForHighlight(h.id);
+      setNoteTarget({ quote: h.text, color: h.color, location: h.location, highlightId: h.id, noteId: existing?.id ?? null, initial: existing?.body ?? '', page: h.page, chapter: h.chapter });
+      setSheet('note');
     }
-    setEditing(null);
+  }
+
+  async function saveNote(body: string) {
+    const t = noteTarget;
+    if (!t) return;
+    if (t.noteId) {
+      await updateNote(t.noteId, body);
+    } else {
+      let highlightId = t.highlightId;
+      if (!highlightId && t.location && t.quote) {
+        highlightId = await addHighlight(book, { color: t.color ?? highlightColors.sun, location: t.location, text: t.quote, chapter: t.chapter, page: t.page });
+      }
+      await addNote(book, { body, highlight_id: highlightId, location: t.location, quote: t.quote, chapter: t.chapter, page: t.page });
+    }
+    setSheet(null);
+    setNoteTarget(null);
+    clearSelection();
+    showToast('Note saved');
   }
 
   function changeMode(m: ReadingMode) {
@@ -229,9 +352,12 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
     );
   }
 
+  const fadeTop = `linear-gradient(180deg, ${theme.bg} 70%, ${theme.bg}00)`;
+  const fadeBottom = `linear-gradient(180deg, ${theme.bg}00, ${theme.bg} 55%)`;
+
   return (
-    <View style={{ flex: 1, backgroundColor: book.format === 'pdf' ? '#c9d3d9' : colors.paper }}>
-      {pageUri ? (
+    <View style={{ flex: 1, backgroundColor: pageBg }}>
+      {ready ? (
         <WebView
           ref={web}
           source={{ uri: pageUri }}
@@ -252,34 +378,28 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
       ) : null}
 
       {/* Running header / footer (design 33): chapter on top, page and % at the bottom. */}
-      {!bars && loaded && book.format !== 'pdf' ? (
+      {!bars && loaded && !isPdf ? (
         <>
           {mode === 'scroll' ? (
             <>
               {/* Scroll mode (design 34): text fades out under the header and footer. */}
-              <View
-                pointerEvents="none"
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 34, backgroundImage: `linear-gradient(180deg, ${colors.paper} 70%, rgba(238,243,245,0))` }}
-              />
-              <View
-                pointerEvents="none"
-                style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: insets.bottom + 60, backgroundImage: `linear-gradient(180deg, rgba(238,243,245,0), ${colors.paper} 55%)` }}
-              />
+              <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 34, backgroundImage: fadeTop }} />
+              <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: insets.bottom + 60, backgroundImage: fadeBottom }} />
             </>
           ) : null}
           <Text
             numberOfLines={1}
             pointerEvents="none"
-            style={[font(700, 12, 1.2), { position: 'absolute', top: insets.top + 8, left: 40, right: 40, textAlign: 'center', color: colors.slate600 }]}>
+            style={[font(700, 12, 1.2), { position: 'absolute', top: insets.top + 8, left: 40, right: 40, textAlign: 'center', color: theme.muted }]}>
             {pos?.chapter ?? book.title}
           </Text>
           <View pointerEvents="none" style={{ position: 'absolute', bottom: insets.bottom + 8, left: 26, right: 26, flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={[font(700, 12, 1.2), { color: colors.slate600 }]}>{pos?.page && pos.total ? `${pos.page} of ${pos.total}` : ''}</Text>
-            <Text style={[font(700, 12, 1.2), { color: colors.slate600 }]}>{pos?.percent != null ? `${Math.round(pos.percent)}%` : ''}</Text>
+            <Text style={[font(700, 12, 1.2), { color: theme.muted }]}>{pos?.page && pos.total ? `${pos.page} of ${pos.total}` : ''}</Text>
+            <Text style={[font(700, 12, 1.2), { color: theme.muted }]}>{pos?.percent != null ? `${Math.round(pos.percent)}%` : ''}</Text>
           </View>
         </>
       ) : null}
-      {!bars && loaded && book.format === 'pdf' && pos?.page ? (
+      {!bars && loaded && isPdf && pos?.page ? (
         <View pointerEvents="none" style={{ position: 'absolute', bottom: insets.bottom + 8, alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 99, backgroundColor: 'rgba(28,46,67,0.7)' }}>
           <Text style={[font(700, 12, 1.2), { color: colors.textOnDark }]}>
             {pos.page} of {pos.total}
@@ -318,19 +438,16 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
           total={pos?.total ?? null}
           percent={pos?.percent ?? 0}
           mode={mode}
-          onBack={() => {
-            flushSave();
-            router.back();
-          }}
+          onBack={close}
           onMode={changeMode}
           onPrev={() => send({ type: 'prev' })}
           onNext={() => send({ type: 'next' })}
           onSeek={(p) => send({ type: 'goToPercent', percent: p })}
-          onSettings={() => showToast('Font, theme and spacing arrive in the next step', 'info')}
+          onSettings={() => setSheet('settings')}
         />
       ) : null}
 
-      {noText && book.format === 'pdf' && bars ? (
+      {noText && isPdf && bars ? (
         <Toast icon="info" style={{ top: insets.top + 80 }}>
           Highlighting isn&apos;t available for this PDF (no selectable text)
         </Toast>
@@ -353,10 +470,7 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
       <CustomColorSheet
         visible={sheet === 'custom' || sheet === 'editCustom'}
         initial={sheet === 'editCustom' && editingHl ? editingHl.color : '#8ccfd9'}
-        onClose={() => {
-          if (sheet === 'custom') setSheet('colors');
-          else setSheet(null);
-        }}
+        onClose={() => setSheet(sheet === 'custom' ? 'colors' : null)}
         onApply={async (hex) => {
           if (sheet === 'editCustom' && editingHl) {
             await rememberColor(hex);
@@ -367,6 +481,76 @@ export function Reader({ book, fileUri, onActivity }: { book: BookRow; fileUri: 
             await applyColor(hex);
           }
         }}
+      />
+      {settings ? (
+        <ReaderSettingsSheet
+          visible={sheet === 'settings'}
+          onClose={() => setSheet(null)}
+          settings={settings}
+          onChange={updateSettings}
+          mode={mode}
+          onMode={changeMode}
+          isPdf={isPdf}
+        />
+      ) : null}
+      <MeaningSheet
+        visible={sheet === 'meaning'}
+        selection={selection?.text ?? ''}
+        bookTitle={book.title}
+        onClose={() => {
+          setSheet(null);
+          clearSelection();
+        }}
+        onSave={async (word, text) => {
+          await addNote(book, {
+            kind: 'meaning',
+            body: text,
+            quote: word,
+            location: selection?.location ?? null,
+            page: selection?.page ?? pos?.page ?? null,
+            chapter: selection?.chapter ?? pos?.chapter ?? null,
+          });
+          setSheet(null);
+          clearSelection();
+          showToast('Saved to notes');
+        }}
+      />
+      <TranslateSheet
+        visible={sheet === 'translate'}
+        text={selection?.text ?? ''}
+        target={profile?.translation_language ?? 'hi'}
+        onChangeTarget={(code) => update({ translation_language: code })}
+        onClose={() => {
+          setSheet(null);
+          clearSelection();
+        }}
+        onSave={async (translation) => {
+          await addNote(book, {
+            kind: 'translation',
+            body: translation,
+            quote: selection?.text ?? null,
+            location: selection?.location ?? null,
+            page: selection?.page ?? pos?.page ?? null,
+            chapter: selection?.chapter ?? pos?.chapter ?? null,
+          });
+          setSheet(null);
+          clearSelection();
+          showToast('Saved to notes');
+        }}
+      />
+      <AddNoteSheet
+        visible={sheet === 'note'}
+        title={noteTarget?.noteId ? 'Edit note' : 'Add note'}
+        quote={noteTarget?.quote}
+        color={noteTarget?.color}
+        initial={noteTarget?.initial ?? ''}
+        meta={[book.title, noteTarget?.page ? `p. ${noteTarget.page}` : null].filter(Boolean).join(' · ')}
+        onClose={() => {
+          setSheet(null);
+          setNoteTarget(null);
+          clearSelection();
+        }}
+        onSave={saveNote}
       />
     </View>
   );
