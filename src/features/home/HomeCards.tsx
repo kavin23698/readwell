@@ -5,7 +5,7 @@ import { Button } from '@/components/ds/Button';
 import { GlassCard } from '@/components/ds/GlassCard';
 import { Icon } from '@/components/ds/Icon';
 import { Cover } from '@/components/kit/Cover';
-import { Initials } from '@/components/kit/Initials';
+import { ProfilePhoto } from '@/features/profile/ProfilePhoto';
 import { Prog } from '@/components/kit/Prog';
 import { Ring } from '@/components/kit/Ring';
 import { Tile } from '@/components/kit/Tile';
@@ -29,7 +29,7 @@ export function HomeHeader({ name }: { name?: string | null }) {
         </Text>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel="Profile" onPress={() => router.navigate('/profile')}>
-        <Initials name={name} />
+        <ProfilePhoto name={name} />
       </Pressable>
     </View>
   );

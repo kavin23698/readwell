@@ -37,7 +37,15 @@
         }
       ],
       "expo-sqlite",
-      "./plugins/withCmakeVersion"
+      "./plugins/withCmakeVersion",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Readwell uses your photos only when you choose a profile picture.",
+          "cameraPermission": "Readwell uses the camera only when you take a profile picture.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

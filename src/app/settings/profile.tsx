@@ -1,17 +1,21 @@
 // Screen 68 · Edit profile: name, email (change sends a confirmation), password.
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Button } from '@/components/ds/Button';
+import { IconButton } from '@/components/ds/IconButton';
+import { Row } from '@/components/kit/Row';
+import { Sheet } from '@/components/kit/Sheet';
 import { AppBar } from '@/components/kit/AppBar';
 import { Banner } from '@/components/kit/Banner';
 import { Field } from '@/components/kit/Field';
-import { Initials } from '@/components/kit/Initials';
 import { Actions, Body } from '@/components/kit/Layout';
 import { Screen } from '@/components/kit/Screen';
 import { Lnk } from '@/components/kit/Typography';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { friendlyAuthError, isOffline, isValidEmail, OFFLINE_MESSAGE } from '@/features/auth/errors';
+import { pickAvatar, removeAvatar } from '@/features/profile/avatar';
+import { ProfilePhoto } from '@/features/profile/ProfilePhoto';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import { authRedirects, supabase } from '@/lib/supabase';
 
@@ -23,6 +27,15 @@ export default function EditProfile() {
   const [email, setEmail] = useState(currentEmail);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [photoSheet, setPhotoSheet] = useState(false);
+
+  async function choosePhoto(source: 'library' | 'camera') {
+    setPhotoSheet(false);
+    if (!profile) return;
+    const r = await pickAvatar(profile, source);
+    if (!r.ok && r.reason === 'permission') setMessage({ text: 'Readwell needs camera access to take a photo. You can allow it in Android settings.', ok: false });
+    else if (!r.ok && r.reason === 'error') setMessage({ text: `Couldn’t set the photo. ${r.message ?? ''}`, ok: false });
+  }
 
   const nameError = !name.trim() ? 'Tell us what to call you.' : null;
   const emailError = !isValidEmail(email) ? 'Enter a valid email, like name@example.com' : null;
@@ -53,7 +66,12 @@ export default function EditProfile() {
       <AppBar title="Edit profile" />
       <Body gap={14}>
         <View style={{ alignItems: 'center', paddingVertical: 8 }}>
-          <Initials name={name || profile?.display_name} size={104} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Change profile photo" onPress={() => setPhotoSheet(true)}>
+            <ProfilePhoto name={name || profile?.display_name} size={104} />
+            <View style={{ position: 'absolute', right: -4, bottom: -4 }}>
+              <IconButton icon="camera" variant="accent" size={40} label="Change profile photo" onPress={() => setPhotoSheet(true)} />
+            </View>
+          </Pressable>
         </View>
         {message ? (
           <Banner icon={message.ok ? 'mail-check' : 'circle-alert'} tone={message.ok ? 'info' : 'danger'}>
@@ -78,6 +96,25 @@ export default function EditProfile() {
           {busy ? 'Saving…' : 'Save changes'}
         </Button>
       </Actions>
+      <Sheet visible={photoSheet} onClose={() => setPhotoSheet(false)} title="Profile photo">
+        <View>
+          <Row icon="camera" label="Take photo" onPress={() => choosePhoto('camera')} />
+          <Row icon="folder-open" label="Choose from gallery" onPress={() => choosePhoto('library')} last={!profile?.avatar_path} />
+          {profile?.avatar_path ? (
+            <Row
+              icon="trash-2"
+              label="Remove photo"
+              danger
+              last
+              right={null}
+              onPress={async () => {
+                setPhotoSheet(false);
+                if (profile) await removeAvatar(profile);
+              }}
+            />
+          ) : null}
+        </View>
+      </Sheet>
     </Screen>
   );
 }

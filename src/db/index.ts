@@ -4,7 +4,7 @@ import * as SQLite from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
 import { createTableSql, syncOrder, tables, type ColumnKind, type RowOf, type TableName } from './schema';
 
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const db = SQLite.openDatabaseSync('readwell.db');
 
@@ -21,7 +21,11 @@ function migrate() {
       db.execSync('CREATE INDEX IF NOT EXISTS idx_notes_book ON notes (book_id);');
     });
   }
-  // Future schema changes: `if (user_version < 2) { ALTER TABLE … }`
+  if (user_version >= 1 && user_version < 2) {
+    // v2: profile photo
+    db.execSync('ALTER TABLE profiles ADD COLUMN avatar_path TEXT;');
+  }
+  // Future schema changes: `if (user_version < 3) { ALTER TABLE … }`
   db.execSync(`PRAGMA user_version = ${DB_VERSION}`);
 }
 migrate();

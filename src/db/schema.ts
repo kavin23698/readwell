@@ -30,6 +30,7 @@ export const tables = {
       notif_daily: 'bool',
       notif_streak: 'bool',
       notif_challenge: 'bool',
+      avatar_path: 'text',
       ...stamps,
     },
   },
@@ -187,6 +188,7 @@ export type ProfileRow = Stamps & {
   notif_daily: boolean;
   notif_streak: boolean;
   notif_challenge: boolean;
+  avatar_path: string | null;
 };
 
 export type BookRow = Stamps & {

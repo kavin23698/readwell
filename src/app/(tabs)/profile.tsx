@@ -5,7 +5,6 @@ import { Button } from '@/components/ds/Button';
 import { GlassCard } from '@/components/ds/GlassCard';
 import { Icon } from '@/components/ds/Icon';
 import { IconButton } from '@/components/ds/IconButton';
-import { Initials } from '@/components/kit/Initials';
 import { Body } from '@/components/kit/Layout';
 import { OfflineBanner } from '@/components/kit/OfflineBanner';
 import { PageTitle } from '@/components/kit/PageTitle';
@@ -13,6 +12,7 @@ import { Prog } from '@/components/kit/Prog';
 import { Screen } from '@/components/kit/Screen';
 import { Tile } from '@/components/kit/Tile';
 import { Meta } from '@/components/kit/Typography';
+import { ProfilePhoto } from '@/features/profile/ProfilePhoto';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import { formatDuration, useLifetime } from '@/features/stats/lifetime';
 import { JOURNEY_DAYS, useDailyStats } from '@/features/stats/stats';
@@ -36,7 +36,7 @@ export default function Profile() {
       <OfflineBanner />
       <Body gap={12}>
         <Pressable accessibilityRole="button" accessibilityLabel="Edit profile" onPress={() => router.push('/settings/profile')} style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-          <Initials name={profile?.display_name} size={60} />
+          <ProfilePhoto size={60} />
           <View style={{ flex: 1 }}>
             <Text style={[font(800, 20, 1.2), { color: colors.rwInk }]}>{profile?.display_name || 'Reader'}</Text>
             {profile ? <Meta>Reading since {since.format(new Date(profile.created_at))}</Meta> : null}
