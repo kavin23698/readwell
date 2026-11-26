@@ -14,3 +14,6 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+// Screen 75 · any crash below this layout shows the designed recovery screen.
+export { ErrorScreen as ErrorBoundary } from '@/components/kit/ErrorScreen';

@@ -62,5 +62,15 @@
     "lint": "expo lint",
     "build:reader": "node reader-web/build.mjs"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "@react-native-ml-kit/identify-languages",
+          "@react-native-ml-kit/translate-text"
+        ]
+      }
+    }
+  }
 }
