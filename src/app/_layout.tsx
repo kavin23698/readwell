@@ -63,6 +63,8 @@ function RootNavigator() {
         <Stack.Screen name="book/[id]" />
         <Stack.Screen name="reader/[id]" />
         <Stack.Screen name="session-summary" />
+        <Stack.Screen name="book-notes/[id]" />
+        <Stack.Screen name="note/[id]" />
       </Stack.Protected>
       {/* Email links (readwell://auth/…) are always reachable. */}
       <Stack.Screen name="auth/callback" />

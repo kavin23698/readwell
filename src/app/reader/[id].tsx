@@ -19,7 +19,7 @@ import { Reader } from '@/features/reader/Reader';
 type Phase = { kind: 'loading'; fraction: number | null } | { kind: 'ready'; uri: string } | { kind: 'error'; offline: boolean; notUploaded: boolean };
 
 export default function ReaderEntry() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, at } = useLocalSearchParams<{ id: string; at?: string }>();
   const book = useBook(id);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading', fraction: null });
   const [attempt, setAttempt] = useState(0);
@@ -100,7 +100,7 @@ export default function ReaderEntry() {
   return (
     <>
       <StatusBar style="dark" />
-      <Reader book={book} fileUri={phase.uri} />
+      <Reader book={book} fileUri={phase.uri} initialLocation={at || null} />
     </>
   );
 }

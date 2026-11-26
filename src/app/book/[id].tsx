@@ -98,7 +98,7 @@ export default function BookDetail() {
         <Seg
           sm
           value={tab}
-          onChange={setTab}
+          onChange={(t) => (t === 'notes' ? router.push({ pathname: '/book-notes/[id]', params: { id: book.id } }) : setTab(t))}
           options={[
             { value: 'overview', label: 'Overview' },
             { value: 'notes', label: `Notes & highlights (${items})` },

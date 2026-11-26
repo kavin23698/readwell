@@ -57,7 +57,7 @@ type Msg =
 type SheetKind = null | 'colors' | 'custom' | 'editCustom' | 'settings' | 'meaning' | 'translate' | 'note';
 type NoteTarget = { quote: string | null; color: string | null; location: string | null; highlightId: string | null; noteId: string | null; initial: string; page: number | null; chapter: string | null };
 
-export function Reader({ book, fileUri }: { book: BookRow; fileUri: string }) {
+export function Reader({ book, fileUri, initialLocation }: { book: BookRow; fileUri: string; initialLocation?: string | null }) {
   const insets = useSafeAreaInsets();
   const { profile, update } = useProfile();
   const web = useRef<WebViewHandle>(null);
@@ -200,8 +200,8 @@ export function Reader({ book, fileUri }: { book: BookRow; fileUri: string }) {
         if (started.current || !settings) return;
         started.current = true;
         const progress = await getProgress(book.id);
-        send({ type: 'init', fileUrl: fileUri, format: book.format, mode, location: progress?.location ?? null, highlights: hlPayload, settings: pageSettings });
-        if (progress?.page) showToast(`Resumed at page ${progress.page}`, 'bookmark');
+        send({ type: 'init', fileUrl: fileUri, format: book.format, mode, location: initialLocation || progress?.location || null, highlights: hlPayload, settings: pageSettings });
+        if (!initialLocation && progress?.page) showToast(`Resumed at page ${progress.page}`, 'bookmark');
         return;
       }
       case 'loaded':
