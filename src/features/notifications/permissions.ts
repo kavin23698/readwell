@@ -24,3 +24,16 @@ export async function requestNotificationPermission(): Promise<boolean> {
 export async function notificationsAllowed(): Promise<boolean> {
   return (await Notifications.getPermissionsAsync()).granted;
 }
+
+// Exact alarms (Android 12+ "Alarms & reminders"). When allowed, expo-notifications schedules
+// reminders with exact alarms; otherwise Android may deliver them up to about an hour late.
+// Below Android 12 this is always granted.
+
+export async function exactAlarmsAllowed(): Promise<boolean> {
+  try {
+    return (await Notifications.getExactAlarmPermissionsAsync()).granted;
+  } catch {
+    return true; // platform without the concept
+  }
+}
+
