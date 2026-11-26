@@ -88,7 +88,8 @@ Requirements: Node.js, Android Studio (SDK + JDK), an Android phone with USB deb
 
 - Email confirmation is currently **off** in Supabase (the built-in email sender only reaches the
   project team, 2 emails/hour). Turn it back on once a custom SMTP provider is configured.
-- Scheduled reminders use Android's inexact alarms, so they can arrive up to about an hour late.
+- Reminders are exact once "Exact reminder times" is on (Settings › Notifications, which opens Android's
+  Alarms & reminders page); without it Android may deliver them up to about an hour late.
 
 ### Windows notes
 
